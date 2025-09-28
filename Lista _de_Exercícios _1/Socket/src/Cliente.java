@@ -1,49 +1,47 @@
-import java.io.BufferedReader;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.Scanner;
 
 public class Cliente {
+    private static final String HOST = "localhost";
+    private static final int PORTA = 12345;
 
-    public static void main(String args[]) throws Exception {
-        try (Socket socket = new Socket("127.0.0.1", 50000);
-             DataInputStream input = new DataInputStream(socket.getInputStream());
-             DataOutputStream output = new DataOutputStream(socket.getOutputStream())) {
+    public static void main(String[] args) {
+        try (Socket socket = new Socket(HOST, PORTA)) {
+            System.out.println("Conectado ao servidor.");
 
-            System.out.println("Conectado ao servidor em 127.0.0.1:50000");
+            ObjectOutputStream saida = new ObjectOutputStream(socket.getOutputStream());
+            ObjectInputStream entrada = new ObjectInputStream(socket.getInputStream());
 
-            // Thread para ler mensagens do servidor (broadcasts)
-            Thread reader = new Thread(() -> {
+          
+            Thread leitorServidor = new Thread(() -> {
                 try {
-                    String msg;
-                    while ((msg = input.readUTF()) != null) {
-                        System.out.println(msg);
+                    Object obj;
+                    while ((obj = entrada.readObject()) != null) {
+                        System.out.println(">> " + obj);
                     }
-                } catch (IOException e) {
-                    System.out.println("Conexão encerrada pelo servidor.");
+                } catch (IOException | ClassNotFoundException e) {
+                    System.out.println("Conexão com servidor encerrada.");
                 }
             });
-            reader.setDaemon(true);
-            reader.start();
+            leitorServidor.start();
 
-            // Leitura do teclado e envio para o servidor
-            BufferedReader teclado = new BufferedReader(new InputStreamReader(System.in));
-            String linha;
-            while ((linha = teclado.readLine()) != null) {
-                // se o usuário digitar "sair" fechamos a conexão de forma elegante
-                if ("sair".equalsIgnoreCase(linha.trim())) {
-                    // envia uma linha vazia (ou apenas fecha) para sinalizar
-                    output.writeUTF("");
-                    output.flush();
-                    break;
-                }
-                output.writeUTF(linha);
-                output.flush();
+           
+            Scanner scanner = new Scanner(System.in);
+            System.out.print("Digite seu nome: ");
+            String nome = scanner.nextLine();
+
+            while (true) {
+                String msg = scanner.nextLine();
+                Pedido pedido = new Pedido(nome, msg);
+                saida.writeObject(pedido);
+                saida.flush();
             }
 
-            System.out.println("Cliente finalizando...");
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }
