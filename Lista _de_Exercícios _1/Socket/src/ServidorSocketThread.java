@@ -1,67 +1,70 @@
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.Socket;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Set;
 
 public class ServidorSocketThread implements Runnable {
+    private Socket socket;
+    private ObjectOutputStream saida;
+    private ObjectInputStream entrada;
+    private Set<ServidorSocketThread> clientes;
 
-    private static final Set<DataOutputStream> clients = Collections.synchronizedSet(new HashSet<>());
+    public ServidorSocketThread(Socket socket, Set<ServidorSocketThread> clientes) {
+        this.socket = socket;
+        this.clientes = clientes;
+        try {
+            this.saida = new ObjectOutputStream(socket.getOutputStream());
+            this.entrada = new ObjectInputStream(socket.getInputStream());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
-    private Socket socketClient;
-    private DataOutputStream saida;
+    // Envia objeto para este cliente
+    public void enviarMensagem(Object obj) {
+        try {
+            saida.writeObject(obj);
+            saida.flush();
+        } catch (IOException e) {
+            System.out.println("Erro ao enviar para cliente: " + socket);
+        }
+    }
 
-    public ServidorSocketThread(Socket socketClient) {
-        this.socketClient = socketClient;
+    // Envia mensagem para todos os clientes conectados
+    private void broadcast(Pedido pedido) {
+        synchronized (clientes) {
+            for (ServidorSocketThread cliente : clientes) {
+                if (cliente != this) {
+                    cliente.enviarMensagem(pedido);
+                }
+            }
+        }
     }
 
     @Override
     public void run() {
-        try (DataInputStream entrada = new DataInputStream(socketClient.getInputStream())) {
-            // registra o stream de saída deste cliente na lista global
-            saida = new DataOutputStream(socketClient.getOutputStream());
-            clients.add(saida);
+        try {
+            Object obj;
+            while ((obj = entrada.readObject()) != null) {
+                if (obj instanceof Pedido pedido) {
+                    System.out.println("Recebido: " + pedido);
 
-            String linha;
-            while (true) {
-                try {
-                    linha = entrada.readUTF();
-                } catch (IOException e) {
-                    break; // cliente desconectou
+                    if (pedido.getMensagem().contains("<todos>")) {
+                        broadcast(pedido);
+                    } else {
+                        enviarMensagem("Servidor recebeu seu pedido: " + pedido.getMensagem());
+                    }
                 }
-                if (linha == null || linha.trim().isEmpty()) {
-                    break;
-                }
-                // broadcast: enviar a mensagem para todos os clientes conectados
-                broadcast("[" + socketClient.getRemoteSocketAddress() + "] " + linha);
             }
-        } catch (IOException e) {
-            System.out.println("Cliente desconectado: " + socketClient.getRemoteSocketAddress());
+        } catch (IOException | ClassNotFoundException e) {
+            System.out.println("Cliente desconectado: " + socket);
         } finally {
-            if (saida != null) {
-                clients.remove(saida);
-                try { saida.close(); } catch (IOException ignored) {}
-            }
-            try { socketClient.close(); } catch (IOException ignored) {}
-        }
-    }
-
-    private void broadcast(String mensagem) {
-        synchronized (clients) {
-            Iterator<DataOutputStream> it = clients.iterator();
-            while (it.hasNext()) {
-                DataOutputStream out = it.next();
-                try {
-                    out.writeUTF(mensagem);
-                    out.flush();
-                } catch (IOException e) {
-                    System.out.println("Falha ao enviar para um cliente: " + e.getMessage());
-                    it.remove(); // remove cliente problemático
-                }
-            }
+            try {
+                socket.close();
+            } catch (IOException ignored) {}
+            clientes.remove(this);
         }
     }
 }
+    
