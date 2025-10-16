@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💬 Chat WebSocket Avançado</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="images/favicon.ico" type="image/x-icon">
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <STyle>
+
+        :root {
+    --primary-color: #667eea;
+    --primary-dark: #5a6fd8;
+    --secondary-color: #764ba2;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --error-color: #ef4444;
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
+    --border-color: #e5e7eb;
+    --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+    color: var(--text-primary);
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: var(--card-bg);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    min-height: 90vh;
+}
+
+/* Header */
+header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: white;
+    padding: 30px;
+    text-align: center;
+}
+
+header h1 {
+    font-size: 2.8em;
+    margin-bottom: 8px;
+    font-weight: 700;
+}
+
+.subtitle {
+    font-size: 1.1em;
+    opacity: 0.9;
+    font-weight: 300;
+}
+
+/* Sections */
+.section {
+    padding: 40px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Login Card */
+.login-card {
+    max-width: 480px;
+    margin: 0 auto;
+    text-align: center;
+    padding: 40px;
+}
+
+.login-card h2 {
+    font-size: 2.2em;
+    margin-bottom: 10px;
+    color: var(--text-primary);
+}
+
+.login-card p {
+    color: var(--text-secondary);
+    margin-bottom: 30px;
+    font-size: 1.1em;
+}
+
+.input-group {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 40px;
+}
+
+#username {
+    flex: 1;
+    padding: 16px 20px;
+    font-size: 16px;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+#username:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+button {
+    padding: 16px 32px;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+}
+
+button:disabled {
+    background: #d1d5db;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-secondary {
+    background: var(--text-secondary) !important;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #4b5563 !important;
+}
+
+.features {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.feature {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--bg-color);
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+/* Chat Header */
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 40px;
+    background: var(--bg-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.header-left h2 {
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.online-count {
+    color: var(--success-color);
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.user-info {
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-right: 16px;
+}
+
+/* Chat Container */
+.chat-container {
+    display: flex;
+    height: 600px;
+    background: var(--card-bg);
+}
+
+/* Users Panel */
+.users-panel {
+    width: 300px;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-color);
+}
+
+.users-header {
+    padding: 24px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: between;
+    align-items: center;
+}
+
+.users-header h3 {
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.badge {
+    background: var(--primary-color);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 600;
+}
+
+.users-list {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.user-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    margin: 8px 0;
+    background: white;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.user-item:hover {
+    border-color: var(--primary-color);
+    transform: translateX(4px);
+}
+
+.user-item.active {
+    border-color: var(--primary-color);
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.user-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success-color);
+}
+
+.user-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.chat-actions {
+    padding: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-action {
+    width: 100%;
+    background: var(--bg-color) !important;
+    color: var(--text-primary) !important;
+    border: 2px solid var(--border-color) !important;
+}
+
+.btn-action:hover {
+    border-color: var(--primary-color) !important;
+    background: white !important;
+}
+
+/* Messages Panel */
+.messages-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.messages {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    background: white;
+}
+
+/* Message Styles */
+.message {
+    padding: 16px 20px;
+    margin: 12px 0;
+    border-radius: 16px;
+    max-width: 70%;
+    word-wrap: break-word;
+    animation: messageAppear 0.3s ease;
+}
+
+@keyframes messageAppear {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message.system {
+    background: var(--bg-color);
+    color: var(--text-secondary);
+    text-align: center;
+    max-width: 100%;
+    font-style: italic;
+    margin: 20px auto;
+    border: 1px solid var(--border-color);
+}
+
+.message.own {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: white;
+    margin-left: auto;
+    border-bottom-right-radius: 4px;
+}
+
+.message.other {
+    background: #f1f5f9;
+    color: var(--text-primary);
+    border-bottom-left-radius: 4px;
+}
+
+.message.private {
+    background: #fef3c7;
+    border: 2px solid #f59e0b;
+    color: var(--text-primary);
+}
+
+.message-info {
+    font-size: 0.75em;
+    opacity: 0.8;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.message-time {
+    font-size: 0.7em;
+    opacity: 0.7;
+}
+
+/* Typing Indicator */
+.typing-indicator {
+    padding: 12px 24px;
+    color: var(--text-secondary);
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing {
+    0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+    40% { transform: scale(1); opacity: 1; }
+}
+
+/* Message Input */
+.message-input-container {
+    display: flex;
+    padding: 24px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-color);
+    gap: 12px;
+}
+
+#message-input, #private-message-input {
+    flex: 1;
+    padding: 16px 20px;
+    font-size: 16px;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    resize: none;
+    height: 52px;
+}
+
+#message-input:focus, #private-message-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Private Chat */
+.private-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-color);
+}
+
+.btn-back {
+    background: none !important;
+    color: var(--primary-color) !important;
+    padding: 8px 16px !important;
+}
+
+.btn-back:hover {
+    background: var(--border-color) !important;
+}
+
+/* Notifications */
+.notifications {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.notification {
+    background: white;
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    margin-bottom: 10px;
+    border-left: 4px solid var(--primary-color);
+    animation: slideIn 0.3s ease;
+    max-width: 300px;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.notification.success {
+    border-left-color: var(--success-color);
+}
+
+.notification.error {
+    border-left-color: var(--error-color);
+}
+
+.notification.warning {
+    border-left-color: var(--warning-color);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .chat-container {
+        flex-direction: column;
+        height: auto;
+    }
+    
+    .users-panel {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        max-height: 200px;
+    }
+    
+    .users-list {
+        display: flex;
+        overflow-x: auto;
+        gap: 12px;
+    }
+    
+    .user-item {
+        min-width: 120px;
+    }
+    
+    .message {
+        max-width: 85%;
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        border-radius: 0;
+        min-height: 100vh;
+    }
+    
+    body {
+        padding: 0;
+    }
+    
+    .section {
+        padding: 20px;
+    }
+    
+    .input-group {
+        flex-direction: column;
+    }
+    
+    .chat-header {
+        flex-direction: column;
+        gap: 16px;
+        text-align: center;
+    }
+    
+    .message {
+        max-width: 95%;
+    }
+}
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+    </STyle>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💬 Chat WebSocket Avançado</h1>
+            <p class="subtitle">Comunicação em tempo real com Spring Boot</p>
+        </header>
+
+        <!-- Tela de Login -->
+        <div id="login-section" class="section">
+            <div class="login-card">
+                <h2>👋 Bem-vindo!</h2>
+                <p>Digite seu nome para entrar no chat</p>
+                <div class="input-group">
+                    <input type="text" id="username" placeholder="Seu nome de usuário" maxlength="20" autocomplete="off">
+                    <button id="enter-btn" onclick="chatApp.entrarNoChat()">Entrar no Chat</button>
+                </div>
+                <div class="features">
+                    <div class="feature">
+                        <span>⚡</span> Tempo real
+                    </div>
+                    <div class="feature">
+                        <span>🔒</span> Mensagens privadas
+                    </div>
+                    <div class="feature">
+                        <span>👥</span> Ver usuários online
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Principal -->
+        <div id="chat-section" class="section hidden">
+            <div class="chat-header">
+                <div class="header-left">
+                    <h2>💬 Chat Público</h2>
+                    <span class="online-count" id="online-count">0 online</span>
+                </div>
+                <div class="header-right">
+                    <span id="user-info" class="user-info"></span>
+                    <button class="btn-secondary" onclick="chatApp.sairDoChat()">Sair</button>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <!-- Painel de Usuários -->
+                <div class="users-panel">
+                    <div class="users-header">
+                        <h3>👥 Usuários Online</h3>
+                        <span class="badge" id="users-count">0</span>
+                    </div>
+                    <div id="users-list" class="users-list"></div>
+                    <div class="chat-actions">
+                        <button class="btn-action" onclick="chatApp.togglePrivateChat()" id="private-chat-btn">
+                            🔒 Chat Privado
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Área de Mensagens -->
+                <div class="messages-panel">
+                    <!-- Chat Público -->
+                    <div id="public-chat" class="chat-area">
+                        <div id="messages" class="messages"></div>
+                        <div id="typing-indicator" class="typing-indicator hidden"></div>
+                        
+                        <div class="message-input-container">
+                            <input type="text" id="message-input" placeholder="Digite sua mensagem pública..." disabled>
+                            <button id="send-btn" onclick="chatApp.enviarMensagem()" disabled>Enviar</button>
+                        </div>
+                    </div>
+
+                    <!-- Chat Privado -->
+                    <div id="private-chat" class="chat-area hidden">
+                        <div class="private-header">
+                            <button class="btn-back" onclick="chatApp.togglePrivateChat()">← Voltar</button>
+                            <span id="private-chat-with">Chat com: </span>
+                        </div>
+                        <div id="private-messages" class="messages"></div>
+                        <div id="private-typing" class="typing-indicator hidden"></div>
+                        
+                        <div class="message-input-container">
+                            <input type="text" id="private-message-input" placeholder="Digite mensagem privada..." disabled>
+                            <button id="private-send-btn" onclick="chatApp.enviarMensagemPrivada()" disabled>Enviar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notificações -->
+        <div id="notifications" class="notifications"></div>
+    </div>
+
+   <SCRipt>
+
+    class ChatApp {
+    constructor() {
+        this.stompClient = null;
+        this.username = null;
+        this.connected = false;
+        this.privateChatWith = null;
+        this.typingTimer = null;
+        this.isTyping = false;
+        
+        this.initializeElements();
+        this.setupEventListeners();
+    }
+
+    initializeElements() {
+        // Sections
+        this.loginSection = document.getElementById('login-section');
+        this.chatSection = document.getElementById('chat-section');
+        
+        // Login elements
+        this.usernameInput = document.getElementById('username');
+        this.enterBtn = document.getElementById('enter-btn');
+        
+        // Chat elements
+        this.userInfo = document.getElementById('user-info');
+        this.onlineCount = document.getElementById('online-count');
+        this.usersCount = document.getElementById('users-count');
+        this.usersList = document.getElementById('users-list');
+        
+        // Messages containers
+        this.messagesContainer = document.getElementById('messages');
+        this.privateMessagesContainer = document.getElementById('private-messages');
+        
+        // Inputs and buttons
+        this.messageInput = document.getElementById('message-input');
+        this.sendBtn = document.getElementById('send-btn');
+        this.privateMessageInput = document.getElementById('private-message-input');
+        this.privateSendBtn = document.getElementById('private-send-btn');
+        
+        // Chat areas
+        this.publicChat = document.getElementById('public-chat');
+        this.privateChat = document.getElementById('private-chat');
+        this.privateChatWith = document.getElementById('private-chat-with');
+        
+        // Typing indicators
+        this.typingIndicator = document.getElementById('typing-indicator');
+        this.privateTypingIndicator = document.getElementById('private-typing-indicator');
+        
+        // Notifications
+        this.notifications = document.getElementById('notifications');
+    }
+
+    setupEventListeners() {
+        // Enter key listeners
+        this.usernameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.entrarNoChat();
+        });
+
+        this.messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.enviarMensagem();
+            this.handleTyping();
+        });
+
+        this.privateMessageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.enviarMensagemPrivada();
+            this.handlePrivateTyping();
+        });
+
+        // Stop typing when input loses focus
+        this.messageInput.addEventListener('blur', () => this.stopTyping());
+        this.privateMessageInput.addEventListener('blur', () => this.stopPrivateTyping());
+
+        // Input changes
+        this.messageInput.addEventListener('input', () => this.handleTyping());
+        this.privateMessageInput.addEventListener('input', () => this.handlePrivateTyping());
+    }
+
+    connect() {
+        const socket = new SockJS('/ws');
+        this.stompClient = Stomp.over(socket);
+        
+        this.stompClient.connect({}, (frame) => {
+            this.connected = true;
+            console.log('Conectado: ' + frame);
+            
+            this.subscribeToChannels();
+            this.joinChat();
+            
+        }, (error) => {
+            console.error('Erro na conexão: ', error);
+            this.connected = false;
+            this.showNotification('Erro ao conectar com o servidor', 'error');
+        });
+    }
+
+    subscribeToChannels() {
+        // Canal público
+        this.stompClient.subscribe('/topic/public', (message) => {
+            const resposta = JSON.parse(message.body);
+            this.handlePublicMessage(resposta);
+        });
+
+        // Canal de usuários online
+        this.stompClient.subscribe('/topic/usuarios', (message) => {
+            const resposta = JSON.parse(message.body);
+            this.updateUsersList(resposta.usuariosOnline);
+        });
+
+        // Canal de entrada do usuário
+        this.stompClient.subscribe('/user/queue/join', (message) => {
+            if (message.body === 'SUCCESS') {
+                this.showNotification('Entrou no chat com sucesso!', 'success');
+                this.enableChat();
+            }
+        });
+
+        // Canal de mensagens privadas
+        this.stompClient.subscribe('/user/queue/private', (message) => {
+            const resposta = JSON.parse(message.body);
+            this.handlePrivateMessage(resposta);
+        });
+
+        // Canal de erros
+        this.stompClient.subscribe('/user/queue/errors', (message) => {
+            const error = JSON.parse(message.body);
+            this.showNotification(error.message, 'error');
+        });
+    }
+
+    joinChat() {
+        const mensagem = {
+            tipoMensagem: 'ENTRAR',
+            origem: this.username,
+            texto: '',
+            dataHora: new Date().toISOString()
+        };
+        
+        this.stompClient.send("/app/chat.entrar", {}, JSON.stringify(mensagem));
+    }
+
+    entrarNoChat() {
+        this.username = this.usernameInput.value.trim();
+        
+        if (!this.username) {
+            this.showNotification('Por favor, digite um nome de usuário!', 'warning');
+            return;
+        }
+
+        if (this.username.length > 20) {
+            this.showNotification('O nome deve ter no máximo 20 caracteres!', 'warning');
+            return;
+        }
+
+        this.connect();
+        this.loginSection.classList.add('hidden');
+        this.chatSection.classList.remove('hidden');
+        this.userInfo.textContent = this.username;
+    }
+
+    sairDoChat() {
+        if (this.connected) {
+            const mensagem = {
+                tipoMensagem: 'SAIR',
+                origem: this.username,
+                texto: '',
+                dataHora: new Date().toISOString()
+            };
+            
+            this.stompClient.send("/app/chat.sair", {}, JSON.stringify(mensagem));
+            this.stompClient.disconnect();
+        }
+        
+        this.resetChat();
+        this.showNotification('Você saiu do chat', 'info');
+    }
+
+    enableChat() {
+        this.messageInput.disabled = false;
+        this.sendBtn.disabled = false;
+        this.privateMessageInput.disabled = false;
+        this.privateSendBtn.disabled = false;
+        this.messageInput.focus();
+    }
+
+    enviarMensagem() {
+        const texto = this.messageInput.value.trim();
+        
+        if (!texto || !this.connected) return;
+
+        const mensagem = {
+            tipoMensagem: 'ENVIAR_TEXTO',
+            origem: this.username,
+            texto: texto,
+            dataHora: new Date().toISOString()
+        };
+
+        this.stompClient.send("/app/chat.enviar", {}, JSON.stringify(mensagem));
+        this.messageInput.value = '';
+        this.stopTyping();
+    }
+
+    enviarMensagemPrivada() {
+        const texto = this.privateMessageInput.value.trim();
+        
+        if (!texto || !this.connected || !this.privateChatWith) return;
+
+        const mensagem = {
+            tipoMensagem: 'PRIVADO',
+            origem: this.username,
+            destino: this.privateChatWith,
+            texto: texto,
+            dataHora: new Date().toISOString()
+        };
+
+        this.stompClient.send("/app/chat.privado", {}, JSON.stringify(mensagem));
+        this.privateMessageInput.value = '';
+        this.stopPrivateTyping();
+        
+        // Also show the message in our own private chat
+        this.displayPrivateMessage({
+            tipo: 'MENSAGEM_PRIVADA',
+            dados: {
+                origem: this.username,
+                destino: this.privateChatWith,
+                texto: texto,
+                dataHora: new Date().toISOString()
+            },
+            timestamp: new Date().toISOString()
+        }, true);
+    }
+
+    handlePublicMessage(resposta) {
+        switch(resposta.tipo) {
+            case 'USUARIO_ENTROU':
+            case 'USUARIO_SAIU':
+                this.displaySystemMessage(resposta.dados);
+                this.updateUsersList(resposta.usuariosOnline);
+                break;
+                
+            case 'MENSAGEM_PUBLICA':
+                this.displayPublicMessage(resposta.dados);
+                break;
+                
+            case 'ATUALIZAR_USUARIOS':
+                this.updateUsersList(resposta.usuariosOnline);
+                break;
+        }
+    }
+
+    handlePrivateMessage(resposta) {
+        if (resposta.tipo === 'MENSAGEM_PRIVADA') {
+            this.displayPrivateMessage(resposta);
+        }
+    }
+
+    displayPublicMessage(mensagem) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${mensagem.origem === this.username ? 'own' : 'other'}`;
+        
+        const time = new Date(mensagem.dataHora).toLocaleTimeString();
+        messageDiv.innerHTML = `
+            <div class="message-info">
+                <strong>${mensagem.origem}</strong>
+                <span class="message-time">${time}</span>
+            </div>
+            <div class="message-text">${this.escapeHtml(mensagem.texto)}</div>
+        `;
+
+        this.messagesContainer.appendChild(messageDiv);
+        this.scrollToBottom(this.messagesContainer);
+    }
+
+    displayPrivateMessage(resposta, isOwn = false) {
+        const mensagem = resposta.dados;
+        const messageDiv = document.createElement('div');
+        
+        if (isOwn) {
+            messageDiv.className = 'message own';
+        } else {
+            messageDiv.className = 'message private';
+        }
+        
+        const time = new Date(mensagem.dataHora).toLocaleTimeString();
+        const sender = isOwn ? 'Você' : mensagem.origem;
+        
+        messageDiv.innerHTML = `
+            <div class="message-info">
+                <strong>${sender} → ${mensagem.destino}</strong>
+                <span class="message-time">${time}</span>
+            </div>
+            <div class="message-text">${this.escapeHtml(mensagem.texto)}</div>
+        `;
+
+        this.privateMessagesContainer.appendChild(messageDiv);
+        this.scrollToBottom(this.privateMessagesContainer);
+    }
+
+    displaySystemMessage(mensagem) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message system';
+        
+        const time = new Date(mensagem.dataHora).toLocaleTimeString();
+        messageDiv.innerHTML = `
+            <div class="message-info">${time}</div>
+            <div>${this.escapeHtml(mensagem.texto)}</div>
+        `;
+
+        this.messagesContainer.appendChild(messageDiv);
+        this.scrollToBottom(this.messagesContainer);
+    }
+
+    updateUsersList(usuarios) {
+        if (!usuarios) return;
+        
+        this.usersList.innerHTML = '';
+        this.usersCount.textContent = usuarios.length;
+        this.onlineCount.textContent = `${usuarios.length} online`;
+        
+        usuarios.forEach(username => {
+            if (username !== this.username) {
+                const userItem = document.createElement('div');
+                userItem.className = 'user-item';
+                userItem.innerHTML = `
+                    <div class="user-avatar">${username.charAt(0).toUpperCase()}</div>
+                    <div class="user-status"></div>
+                    <div class="user-name">${username}</div>
+                `;
+                
+                userItem.addEventListener('click', () => this.startPrivateChat(username));
+                this.usersList.appendChild(userItem);
+            }
+        });
+    }
+
+    startPrivateChat(username) {
+        this.privateChatWith = username;
+        this.privateChatWith.textContent = `Chat com: ${username}`;
+        this.publicChat.classList.add('hidden');
+        this.privateChat.classList.remove('hidden');
+        this.privateMessageInput.focus();
+    }
+
+    togglePrivateChat() {
+        if (this.privateChat.classList.contains('hidden')) {
+            if (!this.privateChatWith) {
+                this.showNotification('Selecione um usuário para conversar', 'warning');
+                return;
+            }
+            this.publicChat.classList.add('hidden');
+            this.privateChat.classList.remove('hidden');
+            this.privateMessageInput.focus();
+        } else {
+            this.publicChat.classList.remove('hidden');
+            this.privateChat.classList.add('hidden');
+            this.messageInput.focus();
+        }
+    }
+
+    handleTyping() {
+        if (!this.isTyping) {
+            this.isTyping = true;
+            const mensagem = {
+                tipoMensagem: 'TYPING',
+                origem: this.username,
+                texto: '',
+                dataHora: new Date().toISOString()
+            };
+            this.stompClient.send("/app/chat.typing", {}, JSON.stringify(mensagem));
+        }
+
+        clearTimeout(this.typingTimer);
+        this.typingTimer = setTimeout(() => {
+            this.stopTyping();
+        }, 1000);
+    }
+
+    stopTyping() {
+        if (this.isTyping) {
+            this.isTyping = false;
+            const mensagem = {
+                tipoMensagem: 'STOP_TYPING',
+                origem: this.username,
+                texto: '',
+                dataHora: new Date().toISOString()
+            };
+            this.stompClient.send("/app/chat.stopTyping", {}, JSON.stringify(mensagem));
+        }
+    }
+
+    handlePrivateTyping() {
+        // Similar to handleTyping but for private chat
+        // Implementation would be similar to handleTyping
+    }
+
+    stopPrivateTyping() {
+        // Similar to stopTyping but for private chat
+    }
+
+    showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        
+        this.notifications.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 5000);
+    }
+
+    scrollToBottom(element) {
+        element.scrollTop = element.scrollHeight;
+    }
+
+    escapeHtml(unsafe) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    resetChat() {
+        this.loginSection.classList.remove('hidden');
+        this.chatSection.classList.add('hidden');
+        this.usernameInput.value = '';
+        this.messagesContainer.innerHTML = '';
+        this.privateMessagesContainer.innerHTML = '';
+        this.usersList.innerHTML = '';
+        this.messageInput.disabled = true;
+        this.sendBtn.disabled = true;
+        this.privateMessageInput.disabled = true;
+        this.privateSendBtn.disabled = true;
+        this.username = null;
+        this.connected = false;
+        this.privateChatWith = null;
+        
+        this.publicChat.classList.remove('hidden');
+        this.privateChat.classList.add('hidden');
+    }
+}
+
+// Initialize the application
+document.addEventListener('DOMContentLoaded', () => {
+    window.chatApp = new ChatApp();
+});
+   </SCRipt>
+</body>
+</html>
