@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat WebSocket IFTM</title>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', Roboto, sans-serif;
+      background-color: #f2f4f7;
+      margin: 0;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #sidebar {
+      width: 260px;
+      background-color: #202c33;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      border-right: 2px solid #1b2329;
+    }
+
+    #user-info {
+      padding: 1rem;
+      background-color: #2a3942;
+      text-align: center;
+    }
+
+    #user-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      list-style: none;
+      margin: 0;
+    }
+
+    #user-list li {
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 6px;
+      background-color: #2f3b43;
+      transition: background-color 0.2s;
+    }
+
+    #user-list li:hover {
+      background-color: #3a4b53;
+    }
+
+    #chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #chat-messages {
+      flex: 1;
+      padding: 1rem;
+      overflow-y: auto;
+      background-color: #e8ebed;
+    }
+
+    .message {
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      max-width: 75%;
+    }
+
+    .mine {
+      background-color: #dcf8c6;
+      margin-left: auto;
+    }
+
+    .theirs {
+      background-color: #fff;
+      margin-right: auto;
+    }
+
+    .system {
+      text-align: center;
+      color: #555;
+      font-style: italic;
+      margin: 8px 0;
+    }
+
+    #chat-form {
+      display: flex;
+      background-color: #fff;
+      padding: 10px;
+      border-top: 1px solid #ccc;
+    }
+
+    #message-input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      outline: none;
+    }
+
+    button {
+      background-color: #008069;
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      margin-left: 8px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: #006f59;
+    }
+
+    #login-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      width: 100%;
+      height: 100vh;
+      background-color: #f2f4f7;
+    }
+
+    #login-container input {
+      padding: 10px;
+      margin: 8px 0;
+      width: 250px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="login-container">
+    <h2>Bem-vindo ao Chat IFTM</h2>
+    <input type="text" id="username" placeholder="Digite seu nome..." />
+    <button id="connect">Entrar</button>
+  </div>
+
+  <div id="chat" style="display: none;">
+    <div id="sidebar">
+      <div id="user-info">
+        <strong id="current-user"></strong>
+      </div>
+      <ul id="user-list"></ul>
+    </div>
+
+    <div id="chat-container">
+      <div id="chat-messages"></div>
+      <form id="chat-form">
+        <input type="text" id="message-input" placeholder="Digite uma mensagem..." />
+        <button type="submit">Enviar</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+
+  <script>
+    let stompClient = null;
+    let username = null;
+    let privateTarget = null;
+
+    const loginContainer = document.getElementById("login-container");
+    const chatContainer = document.getElementById("chat");
+    const currentUserLabel = document.getElementById("current-user");
+    const userList = document.getElementById("user-list");
+    const chatMessages = document.getElementById("chat-messages");
+    const messageInput = document.getElementById("message-input");
+
+    document.getElementById("connect").addEventListener("click", connect);
+    document.getElementById("chat-form").addEventListener("submit", sendMessage);
+
+    function connect() {
+      username = document.getElementById("username").value.trim();
+      if (!username) {
+        alert("Digite um nome de usuário!");
+        return;
+      }
+
+      const socket = new SockJS("/ws");
+      stompClient = Stomp.over(socket);
+
+      stompClient.connect({}, () => {
+        stompClient.subscribe("/topic/public", onMessageReceived);
+        stompClient.subscribe("/user/queue/private", onPrivateMessage);
+        stompClient.subscribe("/user/queue/errors", err => alert(err.body));
+
+        stompClient.send("/app/chat.register", {}, JSON.stringify({ username }));
+
+        loginContainer.style.display = "none";
+        chatContainer.style.display = "flex";
+        currentUserLabel.textContent = "Usuário: " + username;
+      });
+    }
+
+    function sendMessage(event) {
+      event.preventDefault();
+      const messageContent = messageInput.value.trim();
+      if (messageContent && stompClient) {
+        const mensagem = {
+          remetente: username,
+          conteudo: messageContent,
+          destino: privateTarget
+        };
+        stompClient.send("/app/chat.send", {}, JSON.stringify(mensagem));
+        messageInput.value = "";
+        if (privateTarget) {
+          addMessage(`(Você → ${privateTarget}) ${messageContent}`, "mine");
+        }
+      }
+    }
+
+    function onMessageReceived(payload) {
+      const resposta = JSON.parse(payload.body);
+      updateUserList(resposta.usuariosOnline);
+      if (resposta.tipo === "PUBLICA") {
+        addMessage(`${resposta.mensagem.remetente}: ${resposta.mensagem.conteudo}`, resposta.mensagem.remetente === username ? "mine" : "theirs");
+      }
+    }
+
+    function onPrivateMessage(payload) {
+      const resposta = JSON.parse(payload.body);
+      updateUserList(resposta.usuariosOnline);
+      if (resposta.tipo === "PRIVADA") {
+        const { remetente, conteudo, destino } = resposta.mensagem;
+        if (remetente === username) return; // já mostramos no envio
+        addMessage(`(Privado de ${remetente}) ${conteudo}`, "theirs");
+      }
+    }
+
+    function addMessage(text, type) {
+      const div = document.createElement("div");
+      div.className = "message " + type;
+      div.textContent = text;
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function updateUserList(users) {
+      userList.innerHTML = "";
+      users.forEach(u => {
+        const li = document.createElement("li");
+        li.textContent = u === username ? `${u} (você)` : u;
+        li.addEventListener("click", () => {
+          if (u === username) {
+            privateTarget = null;
+            alert("Você não pode enviar mensagens privadas a si mesmo.");
+            return;
+          }
+          privateTarget = u;
+          alert(`Mensagens privadas ativadas para ${u}.`);
+        });
+        userList.appendChild(li);
+      });
+    }
+  </script>
+</body>
+</html>
