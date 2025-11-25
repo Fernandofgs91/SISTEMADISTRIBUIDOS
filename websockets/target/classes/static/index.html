@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat WebSocket IFTM</title>
+
+  <style>
+    body { font-family: 'Segoe UI', Roboto, sans-serif; background: #f2f4f7; margin:0; height:100vh; display:flex; }
+    #sidebar { width:260px; background:#202c33; color:#fff; display:flex; flex-direction:column; border-right:2px solid #1b2329; }
+    #user-info { padding:1rem; background:#2a3942; display:flex; justify-content:space-between; align-items:center; }
+    #logout-btn { background:#ff4d4d; border:none; color:#fff; padding:6px 10px; border-radius:6px; cursor:pointer; font-size:0.85rem; }
+    #user-list { flex:1; overflow:auto; padding:1rem; list-style:none; margin:0; }
+    #user-list li { padding:8px 12px; border-radius:6px; cursor:pointer; margin-bottom:6px; background:#2f3b43; }
+    #chat-container { flex:1; display:flex; flex-direction:column; }
+    #chat-messages { flex:1; padding:1rem; overflow:auto; background:#e8ebed; }
+    .message { margin-bottom:10px; padding:10px; border-radius:10px; max-width:75%; }
+    .mine { background:#dcf8c6; margin-left:auto; }
+    .theirs { background:#fff; margin-right:auto; }
+    #chat-form { display:flex; background:#fff; padding:10px; border-top:1px solid #ccc; }
+    #message-input { flex:1; padding:10px; border:1px solid #ccc; border-radius:8px; }
+    #login-container { display:flex; align-items:center; justify-content:center; flex-direction:column; width:100%; }
+    #login-container input { padding:10px; margin:8px 0; width:250px; border-radius:8px; border:1px solid #ccc; }
+    button { background:#008069; color:#fff; border:none; padding:10px 16px; border-radius:8px; margin-left:8px; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div id="login-container">
+    <h2>Bem-vindo ao Chat IFTM</h2>
+    <input type="text" id="username" placeholder="Digite seu nome..." />
+    <button id="connect">Entrar</button>
+  </div>
+
+  <div id="chat" style="display:none;">
+    <div id="sidebar">
+      <div id="user-info">
+        <strong id="current-user"></strong>
+        <button id="logout-btn">Sair</button>
+      </div>
+      <ul id="user-list"></ul>
+    </div>
+
+    <div id="chat-container">
+      <div id="chat-messages"></div>
+      <form id="chat-form">
+        <input type="text" id="message-input" placeholder="Digite uma mensagem..." />
+        <button type="submit">Enviar</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+
+  <script>
+    let stompClient = null;
+    let username = null;
+    let privateTarget = null;
+
+    const loginContainer = document.getElementById("login-container");
+    const chatContainer = document.getElementById("chat");
+    const currentUserLabel = document.getElementById("current-user");
+    const userList = document.getElementById("user-list");
+    const chatMessages = document.getElementById("chat-messages");
+    const messageInput = document.getElementById("message-input");
+    const logoutBtn = document.getElementById("logout-btn");
+
+    document.getElementById("connect").addEventListener("click", connect);
+    document.getElementById("chat-form").addEventListener("submit", sendMessage);
+    logoutBtn.addEventListener("click", logout);
+
+    function connect() {
+      username = document.getElementById("username").value.trim();
+      if (!username) { alert("Digite um nome de usuário!"); return; }
+
+      const socket = new SockJS("/ws");
+      stompClient = Stomp.over(socket);
+
+      stompClient.connect({}, () => {
+        stompClient.subscribe("/topic/public", onMessageReceived);
+        stompClient.subscribe("/topic/usuarios", onUsersUpdate);
+        stompClient.subscribe("/user/queue/private", onPrivateMessage);
+        stompClient.subscribe("/user/queue/errors", err => alert(err.body));
+
+        stompClient.send("/app/chat.register", {}, JSON.stringify({ username }));
+
+        loginContainer.style.display = "none";
+        chatContainer.style.display = "flex";
+        currentUserLabel.textContent = username;
+      }, (err) => {
+        console.error('STOMP connect error', err);
+        alert('Erro ao conectar: ' + err);
+      });
+    }
+
+    function sendMessage(event) {
+      event.preventDefault();
+      const messageContent = messageInput.value.trim();
+      if (messageContent && stompClient) {
+        const mensagem = { remetente: username, conteudo: messageContent, destino: privateTarget };
+        stompClient.send("/app/chat.send", {}, JSON.stringify(mensagem));
+        messageInput.value = "";
+        if (privateTarget) addMessage(`(Você → ${privateTarget}) ${messageContent}`, "mine");
+      }
+    }
+
+    function onMessageReceived(payload) {
+      const resposta = JSON.parse(payload.body);
+      if (resposta.tipo === "PUBLICA") {
+        const msg = resposta.dados ? resposta.dados : resposta.mensagem ? resposta.mensagem : resposta;
+        // suportar formatos antigos/novos
+        const remetente = msg.remetente || (msg.remetente);
+        const conteudo = msg.conteudo || msg.texto || (msg.texto);
+        addMessage(`${remetente}: ${conteudo}`, remetente === username ? "mine" : "theirs");
+      } else if (resposta.tipo === "ATUALIZAR_USUARIOS") {
+        updateUserList(resposta.usuariosOnline || resposta.dados || []);
+      }
+    }
+
+    function onPrivateMessage(payload) {
+      const resposta = JSON.parse(payload.body);
+      if (resposta.tipo === "PRIVADA") {
+        const msg = resposta.dados ? resposta.dados : resposta.mensagem ? resposta.mensagem : resposta;
+        const remetente = msg.remetente;
+        const conteudo = msg.conteudo || msg.texto || "";
+        if (remetente === username) return; // já mostramos no envio
+        addMessage(`(Privado de ${remetente}) ${conteudo}`, "theirs");
+      } else if (resposta.tipo === "ATUALIZAR_USUARIOS") {
+        updateUserList(resposta.usuariosOnline || []);
+      }
+    }
+
+    function onUsersUpdate(payload) {
+      const resposta = JSON.parse(payload.body);
+      updateUserList(resposta.usuariosOnline || resposta.dados || []);
+    }
+
+    function addMessage(text, type) {
+      const div = document.createElement("div");
+      div.className = "message " + type;
+      div.textContent = text;
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function updateUserList(users) {
+      userList.innerHTML = "";
+      users.forEach(u => {
+        const li = document.createElement("li");
+        li.textContent = u === username ? `${u} (você)` : u;
+        li.addEventListener("click", () => {
+          if (u === username) { privateTarget = null; alert("Você não pode enviar mensagens privadas a si mesmo."); return; }
+          privateTarget = u;
+          alert(`Mensagens privadas ativadas para ${u}.`);
+        });
+        userList.appendChild(li);
+      });
+    }
+
+    function logout() {
+      if (stompClient) {
+        try {
+          stompClient.disconnect(() => console.log("Desconectado do STOMP"));
+        } catch (e) { console.warn("Erro ao desconectar:", e); }
+      }
+      username = null; privateTarget = null;
+      userList.innerHTML = ""; chatMessages.innerHTML = "";
+      chatContainer.style.display = "none"; loginContainer.style.display = "flex";
+      document.getElementById("username").value = "";
+    }
+  </script>
+</body>
+</html>
